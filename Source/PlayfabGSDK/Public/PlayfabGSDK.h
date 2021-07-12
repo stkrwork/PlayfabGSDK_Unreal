@@ -6,7 +6,8 @@
 
 #include "ConnectedPlayer.h"
 #include "GameServerConnectionInfo.h"
-#include "GSDKInternal.h"
+#include "FGSDKInternal.h"
+#include "GSDKOutputDevice.h"
 #include "Modules/ModuleManager.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogPlayfabGSDK, Log, All);
@@ -41,11 +42,11 @@ public:
 
     /// <summary>Kicks off communication threads, heartbeats, etc.  Called implicitly by ReadyForPlayers if not called beforehand.</summary>
     /// <param name="debugLogs">Enables outputting additional logs to the GSDK log file.</param>
-    void Start(bool debugLogs = false);
+    // void Start(bool debugLogs = false);
 
     /// <summary>Tells the Xcloud service information on who is connected.</summary>
-    /// <param name="currentlyConnectedPlayers"></param>
-    void UpdateConnectedPlayers(const TArray<FConnectedPlayer> &currentlyConnectedPlayers);
+    /// <param name="CurrentlyConnectedPlayers">Array of player ids</param>
+    void UpdateConnectedPlayers(const TArray<FConnectedPlayer>& CurrentlyConnectedPlayers);
 
 
 protected:
@@ -64,7 +65,7 @@ public:
 	FOnMaintenance OnMaintenance;
 	
     /// <summary>outputs a message to the log</summary>
-    uint32 LogMessage(const FString &message);
+    void LogMessage(const FString& Message);
 
     /// <summary>Returns a path to the directory where logs will be mapped to the VM host</summary>
     const FString GetLogsDirectory();
@@ -93,5 +94,6 @@ public:
 
 private:
 
-	GSDKInternal* GSDKInternal;
+	FGSDKInternal* GSDKInternal = nullptr;
+	FGSDKOutputDevice* OutputDevice = nullptr;
 };

@@ -3,8 +3,10 @@
 #include "PlayfabGSDK.h"
 
 #include "GSDKConfiguration.h"
+#if UE_SERVER
 #include "GSDKUtils.h"
 #include "Misc/ScopeLock.h"
+#endif
 
 DEFINE_LOG_CATEGORY(LogPlayfabGSDK);
 
@@ -12,17 +14,32 @@ DEFINE_LOG_CATEGORY(LogPlayfabGSDK);
 
 void FPlayfabGSDKModule::StartupModule()
 {
-		
+#if UE_SERVER
+	GSDKInternal = new FGSDKInternal();
+	OutputDevice = new FGSDKOutputDevice();
+#endif
 }
 
 void FPlayfabGSDKModule::ShutdownModule()
 {
-	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
-	// we call this function before unloading the module.
+#if UE_SERVER
+	if (GSDKInternal)
+	{
+		delete GSDKInternal;
+		GSDKInternal = nullptr;
+	}
+	
+	if (OutputDevice)
+	{
+		delete OutputDevice;
+		OutputDevice = nullptr;
+	}
+#endif
 }
 
 bool FPlayfabGSDKModule::ReadyForPlayers()
 {
+#if UE_SERVER
 	if (GSDKInternal->GetHeartbeatRequest().CurrentGameState != EGameState::Active)
 	{
 		GSDKInternal->SetState(EGameState::StandingBy);
@@ -30,29 +47,46 @@ bool FPlayfabGSDKModule::ReadyForPlayers()
 	}
 
 	return GSDKInternal->GetHeartbeatRequest().CurrentGameState == EGameState::Active;
+#else
+	return true;
+#endif
 }
 
 const FGameServerConnectionInfo FPlayfabGSDKModule::GetGameServerConnectionInfo()
 {
+#if UE_SERVER
 	return GSDKInternal->GetConnectionInfo();
+#else
+	return FGameServerConnectionInfo();
+#endif
 }
 
 const TMap<FString, FString> FPlayfabGSDKModule::GetConfigSettings()
 {
+#if UE_SERVER
 	return GSDKInternal->GetConfigSettings();
+#else
+	return TMap<FString, FString>();
+#endif
 }
 
-void FPlayfabGSDKModule::UpdateConnectedPlayers(const TArray<FConnectedPlayer>& currentlyConnectedPlayers)
+void FPlayfabGSDKModule::UpdateConnectedPlayers(const TArray<FConnectedPlayer>& CurrentlyConnectedPlayers)
 {
+#if UE_SERVER
+	GSDKInternal->SetConnectedPlayers(CurrentlyConnectedPlayers);
+#endif
 }
 
-uint32 FPlayfabGSDKModule::LogMessage(const FString& message)
+void FPlayfabGSDKModule::LogMessage(const FString& Message)
 {
-	return 0;
+#if UE_SERVER
+	GSDKInternal->LogMessage(Message);
+#endif
 }
 
 const FString FPlayfabGSDKModule::GetLogsDirectory()
 {
+#if UE_SERVER
 	FScopeLock ScopeLock(&GSDKInternal->GetConfigMutex());
 
 	const TMap<FString, FString> Config = GSDKInternal->GetConfigSettings();
@@ -61,12 +95,14 @@ const FString FPlayfabGSDKModule::GetLogsDirectory()
 	{
 		return Config[LOG_FOLDER_KEY];
 	}
+#endif
 
 	return TEXT("");
 }
 
 const FString FPlayfabGSDKModule::GetSharedContentDirectory()
 {
+#if UE_SERVER
 	FScopeLock ScopeLock(&GSDKInternal->GetConfigMutex());
 
 	const TMap<FString, FString> Config = GSDKInternal->GetConfigSettings();
@@ -75,13 +111,18 @@ const FString FPlayfabGSDKModule::GetSharedContentDirectory()
 	{
 		return Config[SHARED_CONTENT_FOLDER_KEY];
 	}
+#endif
 
 	return TEXT("");
 }
 
 const TArray<FString> FPlayfabGSDKModule::GetInitialPlayers()
 {
+#if UE_SERVER
 	return GSDKInternal->GetInitialPlayers();
+#else
+	return TArray<FString>();
+#endif	
 }
 
 #undef LOCTEXT_NAMESPACE

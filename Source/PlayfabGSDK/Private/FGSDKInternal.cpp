@@ -1,4 +1,4 @@
-﻿#include "GSDKInternal.h"
+﻿#include "FGSDKInternal.h"
 
 #include "GSDKConfiguration.h"
 #include "GSDKUtils.h"
@@ -11,7 +11,7 @@
 #include "Logging/LogMacros.h"
 #include "HAL/Event.h"
 
-GSDKInternal::GSDKInternal()
+FGSDKInternal::FGSDKInternal()
 	: TransitionToActiveEvent(FPlatformProcess::GetSynchEventFromPool(false))
 	, SignalHeartbeatEvent(FPlatformProcess::GetSynchEventFromPool(false))
 {
@@ -92,21 +92,29 @@ GSDKInternal::GSDKInternal()
 
 	KeepHeartbeatRunning = ConfigPtr->ShouldHeartbeat();
 
-	AsyncTask(ENamedThreads::AnyThread, [this]()
-	{
-		this->HeartbeatAsyncTaskFunction();
-	});
+	HeartbeatThread = Async(EAsyncExecution::Thread,
+	[this]()
+        {
+            HeartbeatAsyncTaskFunction();
+        }
+	);
 }
 
-GSDKInternal::~GSDKInternal()
+FGSDKInternal::~FGSDKInternal()
 {
 	KeepHeartbeatRunning = false;
 	FPlatformProcess::ReturnSynchEventToPool(TransitionToActiveEvent);
 	FPlatformProcess::ReturnSynchEventToPool(SignalHeartbeatEvent);
-	// join threads
+	HeartbeatThread.Wait();
+
+	if (LogFile)
+	{
+		delete LogFile;
+		LogFile = nullptr;
+	}
 }
 
-void GSDKInternal::HeartbeatAsyncTaskFunction()
+void FGSDKInternal::HeartbeatAsyncTaskFunction()
 {
 	while (KeepHeartbeatRunning)
 	{
@@ -119,7 +127,7 @@ void GSDKInternal::HeartbeatAsyncTaskFunction()
 	}
 }
 
-void GSDKInternal::OnReceiveHeartbeatResponse(FHttpRequestPtr Request, FHttpResponsePtr Response,
+void FGSDKInternal::OnReceiveHeartbeatResponse(FHttpRequestPtr Request, FHttpResponsePtr Response,
 	bool bConnectedSuccessfully)
 {
 	Request->OnProcessRequestComplete().Unbind();
@@ -133,11 +141,40 @@ void GSDKInternal::OnReceiveHeartbeatResponse(FHttpRequestPtr Request, FHttpResp
 	DecodeHeartbeatResponse(Response->GetContentAsString());
 }
 
-void GSDKInternal::StartLog()
+void FGSDKInternal::StartLog()
 {
+	FScopeLock ScopeLock(&ConfigMutex);
+
+	const FString LogFileName = FString::Printf(TEXT("GSDK_output_%lld.txt"), FDateTime::Now().GetTicks());
+	FString LogFolder = ConfigSettings[FPlayfabGSDKModule::LOG_FOLDER_KEY];
+
+	IPlatformFile& FileManager = FPlatformFileManager::Get().GetPlatformFile();
+
+	if (!FileManager.CreateDirectoryTree(*LogFolder))
+	{
+		LogFolder = "";
+	}
+
+	const FString GSDKLogPath = LogFolder + LogFileName;
+
+	LogFile = FileManager.OpenWrite(*GSDKLogPath, true);
 }
 
-void GSDKInternal::SendHeartbeat()
+void FGSDKInternal::LogMessage(const FString& Message)
+{
+	FScopeLock ScopeLock(&LogMutex);
+
+	const FString MessageWithNewLine = FString::Printf(TEXT("%s\n"), *Message);
+
+	TArray<uint8> MessageBytes;
+	MessageBytes.SetNumUninitialized(MessageWithNewLine.Len());
+	StringToBytes(MessageWithNewLine, MessageBytes.GetData(), MessageBytes.Num());
+	
+	LogFile->Write(MessageBytes.GetData(), MessageBytes.Num());
+	LogFile->Flush(true);
+}
+
+void FGSDKInternal::SendHeartbeat()
 {
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest();
 	for (const auto& HttpHeader: HttpHeaders)
@@ -148,12 +185,12 @@ void GSDKInternal::SendHeartbeat()
 	Request->SetURL(HeartbeatUrl);
 	Request->SetVerb(TEXT("PATCH"));
 	Request->SetContentAsString(EncodeHeartbeatRequest());
-	Request->OnProcessRequestComplete().BindRaw(this, &GSDKInternal::OnReceiveHeartbeatResponse);
+	Request->OnProcessRequestComplete().BindRaw(this, &FGSDKInternal::OnReceiveHeartbeatResponse);
 
 	Request->ProcessRequest();
 }
 
-FString GSDKInternal::EncodeHeartbeatRequest()
+FString FGSDKInternal::EncodeHeartbeatRequest()
 {
 	TSharedPtr<FJsonObject> HeartbeatRequestJson = MakeShared<FJsonObject>();
 
@@ -186,7 +223,7 @@ FString GSDKInternal::EncodeHeartbeatRequest()
 	return HeartbeatRequestJsonString;
 }
 
-void GSDKInternal::DecodeHeartbeatResponse(const FString& ResponseJson)
+void FGSDKInternal::DecodeHeartbeatResponse(const FString& ResponseJson)
 {
 	TSharedPtr<FJsonObject> HeartbeatResponseJson;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseJson);
@@ -325,13 +362,13 @@ void GSDKInternal::DecodeHeartbeatResponse(const FString& ResponseJson)
 	}
 }
 
-FDateTime GSDKInternal::ParseDate(const FString& DateStr)
+FDateTime FGSDKInternal::ParseDate(const FString& DateStr)
 {
 	FDateTime OutDateTime;
 	return FDateTime::Parse(DateStr, OutDateTime);
 }
 
-void GSDKInternal::SetState(EGameState State)
+void FGSDKInternal::SetState(EGameState State)
 {
 	FScopeLock ScopeLock(&StateMutex);
 
@@ -342,7 +379,7 @@ void GSDKInternal::SetState(EGameState State)
 	}
 }
 
-void GSDKInternal::SetConnectedPlayers(const TArray<FConnectedPlayer>& CurrentConnectedPlayers)
+void FGSDKInternal::SetConnectedPlayers(const TArray<FConnectedPlayer>& CurrentConnectedPlayers)
 {
 	FScopeLock ScopeLock(&PlayersMutex);
 	HeartbeatRequest.ConnectedPlayers = CurrentConnectedPlayers;

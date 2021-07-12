@@ -108,12 +108,12 @@ struct FHeartbeatResponse
 	FDateTime NextScheduledMaintenanceUtc;
 };
 
-class GSDKInternal
+class FGSDKInternal
 {
 public:
 	// These must be public for unique_ptr to work
-	GSDKInternal();
-	~GSDKInternal();
+	FGSDKInternal();
+	~FGSDKInternal();
 
 	TArray<FString> GetInitialPlayers() const
 	{
@@ -147,6 +147,8 @@ public:
 	void SetState(EGameState State);
 	void SetConnectedPlayers(const TArray<FConnectedPlayer>& CurrentConnectedPlayers);
 
+	void LogMessage(const FString& Message);
+
 private:
 
 	#define ADD_OPERATION_MAP(VAR) ReturnMap.Add(TEXT(#VAR), EOperation::VAR);
@@ -169,6 +171,8 @@ private:
 	FString SessionCookie;
 	int32 HeatbeatInterval;
 	FString HeartbeatUrl;
+	TFuture<void> HeartbeatThread;
+	IFileHandle* LogFile = nullptr;
 
 	DECLARE_DELEGATE(FOnShutdown);
 	DECLARE_DELEGATE_RetVal(bool, FOnHealthCheck);
@@ -201,6 +205,7 @@ private:
 	void OnReceiveHeartbeatResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	FCriticalSection ConfigMutex;
 
+	FCriticalSection LogMutex;
 	void StartLog();
 	void SendHeartbeat();
 
