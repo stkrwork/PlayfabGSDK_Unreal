@@ -340,12 +340,8 @@ void FGSDKInternal::DecodeHeartbeatResponse(const FString& ResponseJson)
 	{
 		NextHeartbeatIntervalMs = HeartbeatResponseJson->GetNumberField(TEXT("nextHeartbeatIntervalMs"));
 
-		
-		// Clamp to the minimum permitted interval.
-		if (NextHeartbeatIntervalMs < 1000)
-		{
-			NextHeartbeatIntervalMs = 1000;
-		}
+
+		NextHeartbeatIntervalMs = FMath::Max(1000, NextHeartbeatIntervalMs);
 	}
 	else
 	{
