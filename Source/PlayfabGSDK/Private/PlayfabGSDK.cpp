@@ -95,13 +95,6 @@ void FPlayfabGSDKModule::UpdateConnectedPlayers(const TArray<FConnectedPlayer>& 
 #endif
 }
 
-void FPlayfabGSDKModule::LogMessage(const FString& Message)
-{
-#if UE_SERVER
-	GSDKInternal->LogMessage(Message);
-#endif
-}
-
 const FString FPlayfabGSDKModule::GetLogsDirectory()
 {
 #if UE_SERVER
