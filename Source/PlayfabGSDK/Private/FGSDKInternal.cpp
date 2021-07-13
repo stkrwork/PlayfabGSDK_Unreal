@@ -1,4 +1,7 @@
-﻿#include "FGSDKInternal.h"
+﻿// Copyright Stefan Krismann
+// MIT License
+
+#include "FGSDKInternal.h"
 
 #include "GSDKConfiguration.h"
 #include "GSDKUtils.h"
