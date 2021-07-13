@@ -352,7 +352,7 @@ void FGSDKInternal::DecodeHeartbeatResponse(const FString& ResponseJson)
 FDateTime FGSDKInternal::ParseDate(const FString& DateStr)
 {
 	FDateTime OutDateTime;
-	return FDateTime::ParseIso8601(*DateStr, OutDateTime);
+	return FDateTime::ParseHttpDate(DateStr, OutDateTime);
 }
 
 void FGSDKInternal::SetState(EGameState State)
